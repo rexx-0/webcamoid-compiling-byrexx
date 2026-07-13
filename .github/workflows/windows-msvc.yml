@@ -18,7 +18,7 @@ jobs:
         
     - name: Bypass Private Module & Download Public Features
       run: |
-        git config -f .gitmodules --remove-section submodule."libAvKys/ExtraPlugins" || true
+        git rm --cached libAvKys/ExtraPlugins || true
         git submodule update --init --recursive
       shell: bash
         
