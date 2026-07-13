@@ -24,9 +24,11 @@ jobs:
       if: ${{ !startsWith(github.ref, 'refs/tags/') }}
       env:
         DAILY_BUILD: 1
-      run: ./ports/ci/windows-msvc/build.bat
+      run: |
+        ./ports/ci/windows-msvc/build.bat
+        cmake --install build --config Release --prefix build/install
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
         name: webcamoid-windows-build
-        path: build/Release/
+        path: build/install/
