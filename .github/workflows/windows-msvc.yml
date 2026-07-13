@@ -13,21 +13,25 @@ jobs:
     steps:
     - uses: actions/checkout@v6
       with:
-        submodules: true
+        submodules: false
         token: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Bypass Private Module & Download Public Features
+      run: |
+        git config -f .gitmodules --remove-section submodule."libAvKys/ExtraPlugins" || true
+        git submodule update --init --recursive
+      shell: bash
+        
     - name: Install dependencies
       run: ./ports/ci/windows-msvc/install_deps.bat
+      
     - name: Daily Build
       env:
         DAILY_BUILD: 1
       run: ./ports/ci/windows-msvc/build.bat
-    - name: Copy Extra Plugins
-      run: |
-        mkdir -p build/Release/share/webcamoid/models/
-        cp -R libAvKys/ExtraPlugins/* build/Release/share/webcamoid/models/ || echo "ExtraPlugins not found or already copied"
-      shell: bash
+      
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
         name: webcamoid-windows-build
-        path: build/Release/
+        path: build/
