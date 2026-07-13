@@ -13,7 +13,7 @@ jobs:
     steps:
     - uses: actions/checkout@v6
       with:
-        submodules: false
+        submodules: true
         token: ${{ secrets.GITHUB_TOKEN }}
     - name: Install dependencies
       run: ./ports/ci/windows-msvc/install_deps.bat
@@ -24,11 +24,14 @@ jobs:
       if: ${{ !startsWith(github.ref, 'refs/tags/') }}
       env:
         DAILY_BUILD: 1
+      run: ./ports/ci/windows-msvc/build.bat
+    - name: Copy Extra Plugins
       run: |
-        ./ports/ci/windows-msvc/build.bat
-        cmake --install build --config Release --prefix build/install
+        mkdir -p build/Release/share/webcamoid/models/
+        cp -R libAvKys/ExtraPlugins/* build/Release/share/webcamoid/models/ || echo "ExtraPlugins not found or already copied"
+      shell: bash
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
         name: webcamoid-windows-build
-        path: build/install/
+        path: build/Release/
