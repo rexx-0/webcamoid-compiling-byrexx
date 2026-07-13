@@ -89,3 +89,5 @@ Report all issues in the [issues tracker](https://github.com/webcamoid/webcamoid
 ## Subscribe ##
 
 Stay tuned to new releases with the project [feeds](https://github.com/webcamoid/webcamoid/releases.atom).
+
+test build
