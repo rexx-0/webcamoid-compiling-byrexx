@@ -29,5 +29,4 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: webcamoid-windows-build
-        path: build/
-        
+        path: build/Release/
