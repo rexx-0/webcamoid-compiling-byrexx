@@ -89,48 +89,12 @@ jobs:
       # ─────────────────────────────────────────
       # 5. Install NSIS (untuk buat installer)
       # ─────────────────────────────────────────
-      - name: Install NSIS 3.11
+      - name: Install NSIS
         shell: pwsh
         run: |
-          $nsisVer = "3.11"
-          $nsisFile = "nsis-$nsisVer.zip"
-
-          # Coba SourceForge, fallback ke GitHub mirror
-          $urls = @(
-            "https://sourceforge.net/projects/nsis/files/NSIS%203/$nsisVer/$nsisFile/download",
-            "https://sourceforge.net/projects/nsis/files/NSIS%203/$nsisVer/$nsisFile"
-          )
-
-          $downloaded = $false
-          foreach ($url in $urls) {
-            try {
-              Write-Host "Mencoba download NSIS dari: $url"
-              Invoke-WebRequest -Uri $url -OutFile $nsisFile -UseBasicParsing
-              if ((Get-Item $nsisFile).Length -gt 100000) {
-                $downloaded = $true
-                Write-Host "NSIS berhasil didownload ($((Get-Item $nsisFile).Length) bytes)"
-                break
-              }
-            } catch {
-              Write-Warning "Gagal dari $url : $_"
-            }
-          }
-
-          if (-not $downloaded) {
-            # Fallback: install via choco (sudah tersedia di windows-latest)
-            Write-Host "Menggunakan Chocolatey untuk install NSIS..."
-            choco install nsis --version=3.11 -y --no-progress
-          } else {
-            $nsisInstallDir = "C:\Program Files (x86)"
-            Expand-Archive -Path $nsisFile -DestinationPath $nsisInstallDir -Force
-
-            $nsisExtracted = "$nsisInstallDir\nsis-$nsisVer"
-            $nsisTarget = "$nsisInstallDir\NSIS"
-            if (Test-Path $nsisTarget) { Remove-Item $nsisTarget -Recurse -Force }
-            if (Test-Path $nsisExtracted) {
-              Rename-Item $nsisExtracted $nsisTarget
-            }
-          }
+          # Gunakan Chocolatey - sudah pre-installed di semua GitHub Actions runners
+          Write-Host "Installing NSIS via Chocolatey..."
+          choco install nsis -y --no-progress
 
           # Verifikasi NSIS
           $nsisExe = @(
@@ -142,7 +106,8 @@ jobs:
             Write-Host "NSIS ditemukan di: $nsisExe"
             & $nsisExe /VERSION
           } else {
-            Write-Warning "NSIS tidak ditemukan! Installer .exe mungkin tidak terbuat."
+            Write-Error "NSIS tidak ditemukan setelah instalasi!"
+            exit 1
           }
 
       # ─────────────────────────────────────────
