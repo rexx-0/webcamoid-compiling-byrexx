@@ -13,7 +13,6 @@ on:
 
 env:
   QTVER: 6.7.3
-  CMAKE_GENERATOR: "Visual Studio 17 2022"
   # BtbN FFmpeg builds - lebih reliable dari gyan.dev
   FFMPEG_URL: "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl-shared.zip"
   FFMPEG_DIR: "ffmpeg-master-latest-win64-gpl-shared"
@@ -42,6 +41,9 @@ jobs:
 
       # ─────────────────────────────────────────
       # 3. Install Qt via aqtinstall
+      #    Webcamoid butuh: Concurrent, Quick, Multimedia, OpenGL, Widgets
+      #    Base sudah termasuk: Core, Gui, Widgets, Network, OpenGL, Concurrent, Qml, Quick
+      #    Perlu install terpisah: qtmultimedia, qtshadertools
       # ─────────────────────────────────────────
       - name: Install Qt ${{ env.QTVER }} (MSVC 2019 x64)
         shell: pwsh
@@ -49,21 +51,20 @@ jobs:
           pip install -U pip
           pip install aqtinstall
 
-          # Install Qt base + tambahan modul yang dibutuhkan Webcamoid
-          # Webcamoid butuh: Concurrent, Quick, Multimedia, OpenGL, Widgets
-          # Base sudah termasuk: Core, Gui, Widgets, Network, OpenGL, Concurrent, Qml, Quick
-          # Perlu install terpisah: qtmultimedia, qtshadertools (dependency QtQuick)
           aqt install-qt windows desktop $env:QTVER win64_msvc2019_64 -O "C:\Qt" -m qtmultimedia qtshadertools
 
           Write-Host "Qt installed at C:\Qt\$env:QTVER\msvc2019_64"
 
-          # Verifikasi modul Multimedia ada
-          $mmDir = "C:\Qt\$env:QTVER\msvc2019_64\lib\cmake\Qt6Multimedia"
-          if (Test-Path $mmDir) {
-            Write-Host "Qt6Multimedia module: OK"
-          } else {
-            Write-Error "Qt6Multimedia module TIDAK ditemukan di $mmDir!"
-            exit 1
+          # Verifikasi modul-modul penting ada
+          $qtBase = "C:\Qt\$env:QTVER\msvc2019_64"
+          foreach ($mod in @("Qt6Multimedia", "Qt6Widgets", "Qt6Quick", "Qt6Concurrent", "Qt6OpenGL")) {
+            $modDir = "$qtBase\lib\cmake\$mod"
+            if (Test-Path $modDir) {
+              Write-Host "$mod : OK"
+            } else {
+              Write-Error "$mod TIDAK ditemukan di $modDir!"
+              exit 1
+            }
           }
 
       # ─────────────────────────────────────────
@@ -86,6 +87,11 @@ jobs:
               Write-Warning "Percobaan $i gagal: $_"
               Start-Sleep -Seconds 5
             }
+          }
+
+          if (-not (Test-Path $ffmpegZip)) {
+            Write-Error "FFmpeg gagal didownload setelah 3 percobaan!"
+            exit 1
           }
 
           Write-Host "Extracting FFmpeg..."
@@ -126,15 +132,28 @@ jobs:
           }
 
       # ─────────────────────────────────────────
-      # 6. Setup Visual Studio 2022 environment
+      # 6. Setup MSVC environment
+      #    ilammy/msvc-dev-cmd mendeteksi VS secara otomatis
+      #    dan me-setup seluruh environment (cl.exe, lib, include, dll)
       # ─────────────────────────────────────────
-      - name: Setup MSVC environment (VS 2022)
+      - name: Setup MSVC environment
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
 
       # ─────────────────────────────────────────
-      # 7. Configure CMake
+      # 7. Install Ninja build system
+      #    Menggunakan Ninja alih-alih VS generator untuk menghindari
+      #    masalah VS version mismatch (VS 17 vs 18 vs future versions)
+      # ─────────────────────────────────────────
+      - name: Install Ninja
+        shell: pwsh
+        run: |
+          choco install ninja -y --no-progress
+          ninja --version
+
+      # ─────────────────────────────────────────
+      # 8. Configure CMake (menggunakan Ninja generator)
       # ─────────────────────────────────────────
       - name: Configure CMake
         shell: cmd
@@ -150,6 +169,11 @@ jobs:
           echo FFMPEG_PATH: %FFMPEG_PATH%
           echo INSTALL_PREFIX: %INSTALL_PREFIX%
           echo GIT_COMMIT: ${{ github.sha }}
+
+          echo.
+          echo === Compiler Check ===
+          where cl.exe
+          cl.exe 2>&1 | findstr /C:"Version"
 
           if not exist "%QTDIR%\bin\qmake.exe" (
             echo ERROR: Qt tidak ditemukan di %QTDIR%
@@ -167,8 +191,7 @@ jobs:
             -LA ^
             -S . ^
             -B build ^
-            -G "%CMAKE_GENERATOR%" ^
-            -A x64 ^
+            -G "Ninja" ^
             -DCMAKE_BUILD_TYPE=Release ^
             -DCMAKE_INSTALL_PREFIX="%INSTALL_PREFIX%" ^
             -DGIT_COMMIT_HASH="${{ github.sha }}" ^
@@ -177,23 +200,23 @@ jobs:
             -DNOLIBAVDEVICE=ON
 
       # ─────────────────────────────────────────
-      # 8. Build Webcamoid
+      # 9. Build Webcamoid
       # ─────────────────────────────────────────
       - name: Build
         shell: cmd
         run: |
-          cmake --build build --config Release --parallel %NUMBER_OF_PROCESSORS%
+          cmake --build build --parallel %NUMBER_OF_PROCESSORS%
 
       # ─────────────────────────────────────────
-      # 9. Install (copy files ke webcamoid-data)
+      # 10. Install (copy files ke webcamoid-data)
       # ─────────────────────────────────────────
       - name: Install
         shell: cmd
         run: |
-          cmake --build build --config Release --target install
+          cmake --install build
 
       # ─────────────────────────────────────────
-      # 10. Deploy: Clone DeployTools & buat paket
+      # 11. Deploy: Clone DeployTools & buat paket
       # ─────────────────────────────────────────
       - name: Clone DeployTools
         run: |
@@ -225,7 +248,7 @@ jobs:
             -o "%PACKAGES_DIR%"
 
       # ─────────────────────────────────────────
-      # 11. List hasil packages
+      # 12. List hasil packages
       # ─────────────────────────────────────────
       - name: List built packages
         shell: pwsh
@@ -238,7 +261,7 @@ jobs:
           }
 
       # ─────────────────────────────────────────
-      # 12. Upload sebagai workflow artifact (backup)
+      # 13. Upload sebagai workflow artifact (backup)
       # ─────────────────────────────────────────
       - name: Upload packages as workflow artifact
         uses: actions/upload-artifact@v4
@@ -249,7 +272,7 @@ jobs:
           retention-days: 30
 
       # ─────────────────────────────────────────
-      # 13. Tentukan release tag
+      # 14. Tentukan release tag
       # ─────────────────────────────────────────
       - name: Determine release tag
         id: release_tag
@@ -265,7 +288,7 @@ jobs:
           echo "tag=$tag" >> $env:GITHUB_OUTPUT
 
       # ─────────────────────────────────────────
-      # 14. Create / Update GitHub Release & Upload
+      # 15. Create / Update GitHub Release & Upload
       # ─────────────────────────────────────────
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
@@ -279,7 +302,7 @@ jobs:
             - Commit: [`${{ github.sha }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})
             - Qt Version: ${{ env.QTVER }}
             - FFmpeg: BtbN master-latest-win64-gpl-shared
-            - Compiler: MSVC (Visual Studio 2022) x64
+            - Compiler: MSVC x64
             - Run ID: [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
 
             **Files:**
